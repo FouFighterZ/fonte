@@ -1219,17 +1219,31 @@ function openSettings(){
 
 
 /* ---------- Transformations (one step per training day, two steps lost per idle week) ---------- */
+// Ordered by power. m = index whose pictures the form shares (all Kaioken levels share one set, Blue Kaioken another).
+const mixHex = (a, b, t) => '#' + [0,2,4].map(i => Math.round(parseInt(a.slice(1+i,3+i),16)*(1-t) + parseInt(b.slice(1+i,3+i),16)*t).toString(16).padStart(2,'0')).join('');
 const FORMS = [
  {n:'Forme de base', c1:'#AEB6C6', c2:'#5D6577', hair:'#14161D', d:'Le point de départ. Chaque séance compte.'},
- {n:'Kaioken', c1:'#FF6A4D', c2:'#C0121F', hair:'#14161D', d:'Une aura rouge s’allume : la régularité commence à payer.'},
+ ...Array.from({length:20}, (_, k) => { const x = k + 1, t = k / 19;
+   return {n:'Kaioken ×' + x, m:1, c1:mixHex('#FF8F70', '#FF2B2B', t), c2:mixHex('#C0121F', '#6E000C', t), hair:'#14161D', bolts: x >= 10 ? '#FFD3CC' : null,
+     d: x === 1 ? 'Une aura rouge s’allume : la régularité commence à payer.' : x < 10 ? `Puissance multipliée par ${x}. Le corps encaisse.` : x < 20 ? `Kaioken ×${x} : la limite du corps approche.` : 'Kaioken ×20 : tout donner, sans rien retenir.'}; }),
+ {n:'Faux Super Saiyan', c1:'#FFE7A0', c2:'#B8862E', hair:'#3A2A14', spikes:2, d:'Une colère brute qui annonce le grand éveil.'},
  {n:'Super Saiyan', c1:'#FFE866', c2:'#F5A300', hair:'#FFD42A', spikes:2, d:'Le premier grand cap. Cheveux dorés, puissance multipliée.'},
+ {n:'Super Saiyan grade 2', c1:'#FFEA70', c2:'#E89A00', hair:'#FFD42A', spikes:2, d:'Plus de muscle, plus de force brute.'},
+ {n:'Super Saiyan grade 3', c1:'#FFE35A', c2:'#D98800', hair:'#FFCC1A', spikes:2, d:'Une masse énorme. Puissant, mais lent.'},
+ {n:'Super Saiyan maîtrisé', c1:'#FFF2A0', c2:'#F0B000', hair:'#FFDD44', spikes:2, d:'La forme devenue naturelle, sans effort.'},
  {n:'Super Saiyan 2', c1:'#FFF08A', c2:'#F5B800', hair:'#FFD42A', spikes:2, bolts:'#BFE9FF', d:'Des éclairs crépitent autour de vous. Rien ne vous arrête.'},
  {n:'Super Saiyan 3', c1:'#FFD84A', c2:'#E08A00', hair:'#FFC400', spikes:2, long:true, bolts:'#BFE9FF', d:'Une crinière jusqu’au bas du dos. Une discipline rare.'},
+ {n:'Super Saiyan 4', c1:'#FFB066', c2:'#C2361F', hair:'#14161D', spikes:2, long:true, d:'La force sauvage, enfin maîtrisée.'},
  {n:'Super Saiyan God', c1:'#FF7A92', c2:'#D1123F', hair:'#E0244A', spikes:1, d:'Une énergie divine, calme et brûlante.'},
  {n:'Super Saiyan Blue', c1:'#7BEFFF', c2:'#1C7BFF', hair:'#3FC8FF', spikes:2, d:'La maîtrise totale de l’énergie divine.'},
+ {n:'Super Saiyan Blue Kaioken', m:31, c1:'#7BEFFF', c2:'#D1123F', hair:'#3FC8FF', spikes:2, d:'Le divin et le Kaioken réunis.'},
+ {n:'Super Saiyan Blue Kaioken ×10', m:31, c1:'#9AF2FF', c2:'#B00C2A', hair:'#3FC8FF', spikes:2, bolts:'#FFD3CC', d:'Un risque énorme pour une puissance énorme.'},
+ {n:'Super Saiyan Blue Kaioken ×20', m:31, c1:'#C2F7FF', c2:'#8A0018', hair:'#3FC8FF', spikes:2, bolts:'#FFFFFF', d:'Au-delà de toute limite raisonnable.'},
  {n:'Ultra Instinct (Signe)', c1:'#D9E2FF', c2:'#6B7BD6', hair:'#23283B', spikes:1, sparks:true, d:'Le corps bouge tout seul. L’entraînement est devenu un réflexe.'},
  {n:'Ultra Instinct Maîtrisé', c1:'#FFFFFF', c2:'#9FB0E8', hair:'#E8EDF7', spikes:1, sparks:true, d:'Le sommet. Gardez le rythme pour rester ici.'},
 ];
+// Old 9-form list -> new index (pictures and framing follow their form).
+const FORMS_V1 = [0, 1, 22, 26, 27, 29, 30, 34, 35];
 const MAXF = FORMS.length - 1;
 const dayKey = t => { const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); };
 const dayDiff = (a, b) => Math.round((b - a) / DAY);
@@ -1265,8 +1279,19 @@ const Media = {
   db:null, urls:{}, types:{},
   open(){ if (this.db) return Promise.resolve(this.db); return new Promise((res, rej) => { try { const r = indexedDB.open('fonte-media', 1);
     r.onupgradeneeded = () => r.result.createObjectStore('m'); r.onsuccess = () => res(this.db = r.result); r.onerror = () => rej(r.error); } catch(e){ rej(e); } }); },
-  async load(){ try { await this.open(); await new Promise(res => { const req = this.db.transaction('m').objectStore('m').openCursor();
-    req.onsuccess = () => { const c = req.result; if (c) { const v = c.value; this.set(c.key, v instanceof Blob ? v : (v && v.buf ? new Blob([v.buf], {type:v.type}) : null)); c.continue(); } else res(); }; req.onerror = () => res(); }); } catch(e){} },
+  async load(){ try { await this.open();
+    const rows = await new Promise(res => { const out = [], req = this.db.transaction('m').objectStore('m').openCursor();
+      req.onsuccess = () => { const c = req.result; if (c) { out.push([c.key, c.value]); c.continue(); } else res(out); }; req.onerror = () => res(out); });
+    let list = rows;
+    if (S.settings.formsV !== 2) {
+      const remap = k => { const anim = typeof k === 'string', i = +String(k).replace('a', ''); const n = FORMS_V1[i] ?? i; return anim ? 'a' + n : n; };
+      list = rows.map(([k, v]) => [remap(k), v]);
+      if (rows.length) await new Promise((res, rej) => { const tx = this.db.transaction('m', 'readwrite'), st = tx.objectStore('m'); st.clear(); list.forEach(([k, v]) => st.put(v, k)); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+      const fr = {}; Object.entries(S.settings.frames || {}).forEach(([k, v]) => { fr[remap(/^a/.test(k) ? k : +k)] = v; });
+      S.settings.frames = fr; S.settings.formsV = 2; save();
+    }
+    list.forEach(([k, v]) => this.set(k, v instanceof Blob ? v : (v && v.buf ? new Blob([v.buf], {type:v.type}) : null)));
+  } catch(e){} },
   set(k, blob){ if (this.urls[k]) URL.revokeObjectURL(this.urls[k]); delete this.urls[k]; delete this.types[k]; if (blob) { this.urls[k] = URL.createObjectURL(blob); this.types[k] = blob.type || ''; } },
   async write(k, blob){
     const val = blob ? {type:blob.type || '', buf: await blob.arrayBuffer()} : null;
@@ -1325,11 +1350,12 @@ function chooseMediaSlot(file){
   if (file.size > 60 * 1024 * 1024) { toast('Fichier trop lourd (60 Mo maximum).'); return; }
   UI.pendingMedia = file;
   openSheet(() => `${sheetHead('Où mettre ce visuel ?')}<p class="muted" style="margin:0">Choisissez la transformation et l’emplacement pour « ${esc(file.name)} ».</p>
-    <div class="list">${FORMS.map((f,i) => `<div class="li"><span class="pmini" style="width:38px;height:46px;flex:none;border-radius:10px;background:var(--hero);display:block">${formVisual(i)}</span><span class="grow t">${f.n}</span>
+    <div class="list">${FORMS.map((f,i) => mk(i) !== i ? '' : `<div class="li"><span class="pmini" style="width:38px;height:46px;flex:none;border-radius:10px;background:var(--hero);display:block">${formVisual(i)}</span><span class="grow t">${i === 1 ? 'Kaioken (×1 à ×20)' : i === 31 ? 'Blue Kaioken (×1, ×10, ×20)' : f.n}</span>
       <button class="btn sm ghost" data-a="putMedia" data-k="${i}">Accueil</button><button class="btn sm ghost" data-a="putMedia" data-k="a${i}">Animation</button></div>`).join('')}</div>`, {onClose:() => { UI.pendingMedia = null; }});
 }
-const formVisual = (i, cls='') => Media.urls[i] ? Media.html(i) : Media.urls['a' + i] ? Media.html('a' + i) : emblem(i, cls);
-const animVisual = (i, cls='') => Media.urls['a' + i] ? Media.html('a' + i) : formVisual(i, cls);
+const mk = i => (FORMS[i] && FORMS[i].m != null) ? FORMS[i].m : i;
+const formVisual = (i, cls='') => { const k = mk(i); return Media.urls[k] ? Media.html(k) : Media.urls['a' + k] ? Media.html('a' + k) : emblem(i, cls); };
+const animVisual = (i, cls='') => { const k = mk(i); return Media.urls['a' + k] ? Media.html('a' + k) : formVisual(i, cls); };
 const mediaKey = v => /^a\d+$/.test(v) ? v : +v;
 const mediaForm = k => +String(k).replace('a', '');
 function emblem(i, cls=''){
@@ -1369,8 +1395,8 @@ function openPower(){
       <span class="small muted">Une seule montée par jour, même avec deux séances. La perte est appliquée le 8ᵉ jour sans séance.</span></div>
     ${ev.length ? `<div class="card stack"><h3 class="h3">Historique</h3><div class="pev">${ev.map(e => `<div class="row between small"><span class="muted" style="text-transform:capitalize">${new Date(e.t).toLocaleDateString('fr-FR',{weekday:'short', day:'numeric', month:'short'})}</span><span class="${e.d>0?'up':e.d<0?'down':''}">${e.d>0?'▲ +1':e.d<0?'▼ '+e.d:e.up?'= séance (sommet)':'= déjà au minimum'} · ${FORMS[e.lvl].n}</span></div>`).join('')}</div></div>` : ''}
     <div class="card stack"><h3 class="h3">Vos images</h3><span class="small muted">Pour chaque transformation : une image pour l’accueil et un GIF ou une courte vidéo pour l’animation de déblocage. Si un seul des deux est fourni, il sert partout. Vous pouvez aussi tout importer d’un coup avec un pack (Réglages). Les fichiers restent dans ce téléphone et ne sont jamais envoyés en ligne.</span></div>
-    <div class="list">${FORMS.map((f,i) => `<div class="li plad ${i===P.level?'cur':''} ${i>P.level?'locked':''}" style="--c1:${f.c1};--c2:${f.c2}"><span class="pmini">${formVisual(i)}</span><span class="grow"><span class="t" style="display:block">${f.n}</span><span class="s" style="display:block;white-space:normal">${i>P.level ? 'Verrouillé · encore ' + (i-P.level) + ' séance' + (i-P.level>1?'s':'') : f.d}</span>
-      <span class="mslots">${[[i,'Image accueil'],['a'+i,'Animation']].map(([k,l]) => `<span class="mslot"><span class="lbl">${l}</span><span class="row" style="gap:6px"><label class="btn sm ghost" for="fm-${k}">${Media.urls[k]?'Changer':'Ajouter'}</label><input type="file" id="fm-${k}" data-media="${k}" accept="image/*,video/*" hidden>${Media.urls[k]?`<button class="btn sm ghost" data-a="delMedia" data-k="${k}" aria-label="Retirer ${l}">${I.x.replace('<svg','<svg width="14" height="14"')}</button>`:''}</span>${Media.urls[k]?`<button class="btn sm ghost" data-a="openFrame" data-k="${k}">Cadrer</button>`:''}</span>`).join('')}</span>
+    <div class="list">${FORMS.map((f,i) => `<div class="li plad ${i===P.level?'cur':''} ${i>P.level?'locked':''}" style="--c1:${f.c1};--c2:${f.c2}"><span class="pmini">${formVisual(i)}</span><span class="grow"><span class="t" style="display:block">${f.n}</span><span class="s" style="display:block;white-space:normal">${i>P.level ? 'Verrouillé · encore ' + (i-P.level) + ' séance' + (i-P.level>1?'s':'') : f.d}</span><span class="small muted">Niveau ${i}</span>
+      ${mk(i) !== i ? `<span class="small muted" style="display:block;margin-top:6px">Visuels partagés avec ${FORMS[mk(i)].n}.</span>` : `<span class="mslots">${[[i,'Image accueil'],['a'+i,'Animation']].map(([k,l]) => `<span class="mslot"><span class="lbl">${l}</span><span class="row" style="gap:6px"><label class="btn sm ghost" for="fm-${k}">${Media.urls[k]?'Changer':'Ajouter'}</label><input type="file" id="fm-${k}" data-media="${k}" accept="image/*,video/*" hidden>${Media.urls[k]?`<button class="btn sm ghost" data-a="delMedia" data-k="${k}" aria-label="Retirer ${l}">${I.x.replace('<svg','<svg width="14" height="14"')}</button>`:''}</span>${Media.urls[k]?`<button class="btn sm ghost" data-a="openFrame" data-k="${k}">Cadrer</button>`:''}</span>`).join('')}</span>`}
       ${i>0?`<button class="btn sm ghost" style="margin-top:8px" data-a="previewPower" data-i="${i}">${I.play}Voir l’animation</button>`:''}</span>
       ${i===P.level?'<span class="pill acc">Actuel</span>':i<P.level?'<span class="pill good">Acquis</span>':''}</div>`).join('')}</div>`;
   });
@@ -1378,7 +1404,7 @@ function openPower(){
 // Compares the computed level to the last one shown and plays the matching moment.
 function checkPower(silent){
   const P = powerState();
-  if (S.settings.powerRules !== 2) { S.settings.powerRules = 2; S.settings.seenLvl = P.level; save(); return; }
+  if (S.settings.powerRules !== 3) { S.settings.powerRules = 3; S.settings.seenLvl = P.level; save(); return; }
   const seen = S.settings.seenLvl;
   if (seen == null || silent) { if (seen !== P.level) { S.settings.seenLvl = P.level; save(); } return; }
   if (P.level === seen) return;
@@ -1730,7 +1756,7 @@ Store.connect();
 </script>
 
 <script>
-window.FONTE_VERSION = '20261109231511';
+window.FONTE_VERSION = '20261109232153';
 // Offline support: cache the app so it opens without network.
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // Ask the browser not to evict the workout log when space runs low.
