@@ -36,15 +36,38 @@ head_extra = f'''<!doctype html>
 split = body.index('<div id="app">')
 sw_reg = f'''
 <script>
+window.FONTE_VERSION = '{VERSION}';
 // Offline support: cache the app so it opens without network.
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {{}}));
 // Ask the browser not to evict the workout log when space runs low.
 try {{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }} catch(e) {{}}
+// Updates: compare with the published version on launch and whenever the app comes back to the screen.
+let lastCheck = 0;
+window.fonteCheckUpdate = async (manual) => {{
+  if (!manual && Date.now() - lastCheck < 60000) return;
+  lastCheck = Date.now();
+  try {{
+    const r = await fetch('version.json?t=' + Date.now(), {{cache:'no-store'}});
+    const v = (await r.json()).version;
+    if (v && v !== window.FONTE_VERSION) {{
+      if (typeof toast === 'function') toast('Mise à jour en cours…');
+      try {{ const reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); }} catch(e) {{}}
+      try {{ sessionStorage.setItem('fonte-updated', v); }} catch(e) {{}}
+      setTimeout(() => location.reload(), 600);
+    }} else if (manual && typeof toast === 'function') toast('Vous avez la dernière version.');
+  }} catch(e) {{ if (manual && typeof toast === 'function') toast('Pas de réseau : impossible de vérifier pour le moment.'); }}
+}};
+window.addEventListener('load', () => {{
+  try {{ if (sessionStorage.getItem('fonte-updated')) {{ sessionStorage.removeItem('fonte-updated'); setTimeout(() => typeof toast === 'function' && toast('Fonte a été mise à jour.'), 400); }} }} catch(e) {{}}
+  window.fonteCheckUpdate();
+}});
+document.addEventListener('visibilitychange', () => {{ if (document.visibilityState === 'visible') window.fonteCheckUpdate(); }});
 </script>
 '''
 index = head_extra + body[:split] + '</head>\n<body>\n' + body[split:] + sw_reg + '</body>\n</html>\n'
 OUT.mkdir(exist_ok=True)
 (OUT / 'index.html').write_text(index, encoding='utf-8')
+(OUT / 'version.json').write_text(json.dumps({'version': VERSION}), encoding='utf-8')
 
 # ---------- manifest ----------
 manifest = {

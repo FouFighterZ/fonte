@@ -1191,6 +1191,7 @@ function openSettings(){
       <label class="btn" for="packFile">Importer un pack ou une image</label><input id="packFile" type="file" accept=".fontepack,.json,application/json,application/octet-stream,*/*" hidden></div>
     <div class="card stack"><b>Données d’exemple</b><span class="small muted">8 semaines de séances Push / Pull / Legs et une courbe de poids, pour essayer les graphiques. Elles sont marquées « Exemple ».</span>
       ${hasSample?'<button class="btn danger" data-a="removeSample">Retirer les exemples</button>':'<button class="btn" data-a="loadSample">Charger les exemples</button>'}</div>
+    ${window.FONTE_VERSION ? `<div class="card row between"><span><b>Version de l’app</b><br><span class="small muted">${appVersionLabel()}</span></span><button class="btn sm ghost" data-a="checkUpdate">Vérifier</button></div>` : ''}
     <button class="btn danger block" data-a="wipe">Effacer toutes mes données</button>`; }, {onClose:render});
 }
 
@@ -1255,6 +1256,11 @@ const Media = {
     return this.types[k].startsWith('video/') ? `<video class="pmedia" src="${u}" autoplay muted loop playsinline ${extra}></video>` : `<img class="pmedia" src="${u}" alt="">`; }
 };
 // Picture slot (key i) shows on cards; animation slot (key 'a'+i) plays at the unlock. Each falls back to the other, then to the drawing.
+// FONTE_VERSION is YYYYMMDDhhmmss, set by build_app.py in the installable app only.
+function appVersionLabel(){
+  const v = String(window.FONTE_VERSION || ''), d = new Date(+v.slice(0,4), +v.slice(4,6) - 1, +v.slice(6,8), +v.slice(8,10), +v.slice(10,12));
+  return 'Publiée le ' + d.toLocaleDateString('fr-FR', {day:'numeric', month:'long'}) + ' à ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+}
 function mediaError(e){
   const n = e && e.name;
   if (n === 'QuotaExceededError') return 'Plus assez d’espace sur le téléphone pour ce fichier.';
@@ -1552,6 +1558,7 @@ const A = {
   stRest:d => { S.settings.rest = Math.max(15, Math.min(600, S.settings.rest + +d.d)); save(); refreshSheet(); },
   stGoal:d => { S.settings.goal = Math.max(1, Math.min(7, S.settings.goal + +d.d)); checkPower(true); save(); refreshSheet(); render(); },
   stToggle:d => { S.settings[d.k] = !S.settings[d.k]; save(); refreshSheet(); },
+  checkUpdate:() => window.fonteCheckUpdate && window.fonteCheckUpdate(true),
   exportData:async () => {
     const data = JSON.stringify({app:'Fonte', version:1, exported:new Date().toISOString(), ...S}, null, 2);
     const filename = 'fonte-sauvegarde-' + new Date().toISOString().slice(0,10) + '.json';
