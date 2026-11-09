@@ -250,12 +250,12 @@ button.li:hover{background:color-mix(in srgb, var(--surface2) 50%, transparent)}
 @keyframes breathe{50%{transform:scale(1.06)}}
 
 /* Sheets */
-#sheets .layer{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
-#sheets .scrim{position:absolute;inset:0;background:var(--scrim);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);animation:fade .2s}
-#sheets .sheet{position:relative;width:100%;max-width:560px;max-height:calc(100% - 40px - env(safe-area-inset-top, 0px));background:var(--bg);border-radius:26px 26px 0 0;display:flex;flex-direction:column;box-shadow:var(--shadow);animation:up .28s cubic-bezier(.2,.8,.2,1)}
+/* The whole layer scrolls (reliable with touch on iOS and Android); a short sheet sits at the bottom via margin-top:auto. */
+#sheets .layer{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-top:calc(40px + env(safe-area-inset-top, 0px))}
+#sheets .scrim{position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);animation:fade .2s}
+#sheets .sheet{position:relative;flex:none;margin-top:auto;width:100%;max-width:560px;background:var(--bg);border-radius:26px 26px 0 0;display:flex;flex-direction:column;box-shadow:var(--shadow);animation:up .28s cubic-bezier(.2,.8,.2,1)}
 #sheets .grab{width:44px;height:5px;border-radius:9px;background:var(--line);margin:9px auto 0;flex:none}
-#sheets .sheet{overflow:hidden}
-#sheets .sbody{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:12px var(--gut-r) calc(22px + env(safe-area-inset-bottom, 0px)) var(--gut-l);display:flex;flex-direction:column;gap:16px}
+#sheets .sbody{padding:12px var(--gut-r) calc(22px + env(safe-area-inset-bottom, 0px)) var(--gut-l);display:flex;flex-direction:column;gap:16px}
 #sheets .shead{display:flex;align-items:center;justify-content:space-between;gap:10px}
 #sheets .shead .h2{font-style:italic}
 @keyframes up{from{transform:translateY(60px);opacity:.3}to{transform:none;opacity:1}}
@@ -1058,10 +1058,10 @@ function renderSheets(){
     let el = root.querySelector(`[data-id="${s.id}"]`);
     if (!el) { el = document.createElement('div'); el.className = 'layer'; el.dataset.id = s.id;
       el.innerHTML = `<div class="scrim" data-a="closeSheet"></div><section class="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div class="sbody"></div></section>`; root.appendChild(el); }
-    const body = el.querySelector('.sbody'), st = body.scrollTop;
+    const body = el.querySelector('.sbody'), st = el.scrollTop;
     const act = document.activeElement, actId = act && body.contains(act) ? act.id : null, sel = actId && act.selectionStart;
     body.innerHTML = s.fn(s);
-    body.scrollTop = st;
+    el.scrollTop = st;
     if (actId) { const n = document.getElementById(actId); if (n) { n.focus(); try { n.setSelectionRange(sel, sel); } catch(e){} } }
   });
 }
