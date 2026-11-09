@@ -254,7 +254,8 @@ button.li:hover{background:color-mix(in srgb, var(--surface2) 50%, transparent)}
 #sheets .scrim{position:absolute;inset:0;background:var(--scrim);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);animation:fade .2s}
 #sheets .sheet{position:relative;width:100%;max-width:560px;max-height:calc(100% - 40px - env(safe-area-inset-top, 0px));background:var(--bg);border-radius:26px 26px 0 0;display:flex;flex-direction:column;box-shadow:var(--shadow);animation:up .28s cubic-bezier(.2,.8,.2,1)}
 #sheets .grab{width:44px;height:5px;border-radius:9px;background:var(--line);margin:9px auto 0;flex:none}
-#sheets .sbody{overflow-y:auto;padding:12px var(--gut-r) calc(22px + env(safe-area-inset-bottom, 0px)) var(--gut-l);display:flex;flex-direction:column;gap:16px}
+#sheets .sheet{overflow:hidden}
+#sheets .sbody{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:12px var(--gut-r) calc(22px + env(safe-area-inset-bottom, 0px)) var(--gut-l);display:flex;flex-direction:column;gap:16px}
 #sheets .shead{display:flex;align-items:center;justify-content:space-between;gap:10px}
 #sheets .shead .h2{font-style:italic}
 @keyframes up{from{transform:translateY(60px);opacity:.3}to{transform:none;opacity:1}}
