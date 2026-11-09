@@ -388,10 +388,15 @@ table.pct td:last-child{text-align:right;font-weight:700}
 @keyframes ring{0%{opacity:1;transform:scale(.4)}100%{opacity:0;transform:scale(1.6)}}
 @keyframes slam{0%{opacity:0;transform:scale(1.6)}100%{opacity:1;transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){ #powerup .pu-new,#powerup .pu-txt{opacity:1} #powerup .pu-old,#powerup .pu-parts{display:none} }
-.pmedia{width:100%;height:100%;object-fit:cover;border-radius:16px;display:block;background:#05060A}
-.pcard .pemb .pmedia{border-radius:16px}
-.plad .pmini .pmedia{border-radius:10px}
-#powerup .pu-stage .pmedia{border-radius:26px;box-shadow:0 0 50px var(--c1), 0 0 120px color-mix(in srgb, var(--c2) 60%, transparent)}
+.pmwrap{display:block;width:100%;height:100%;overflow:hidden;border-radius:16px;background:#05060A}
+.pmedia{width:100%;height:100%;object-fit:cover;display:block}
+.plad .pmini .pmwrap{border-radius:10px}
+#powerup .pu-stage .pmwrap{border-radius:26px;box-shadow:0 0 50px var(--c1), 0 0 120px color-mix(in srgb, var(--c2) 60%, transparent)}
+.frbox{position:relative;width:min(70vw,260px);aspect-ratio:100/120;margin:0 auto;border-radius:22px;overflow:hidden;touch-action:none;cursor:grab;box-shadow:var(--shadow)}
+.frbox .pmwrap{border-radius:22px}
+.frbox:active{cursor:grabbing}
+.frgrid{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to right, transparent 33%, rgba(255,255,255,.35) 33%, rgba(255,255,255,.35) calc(33% + 1px), transparent calc(33% + 1px), transparent 66%, rgba(255,255,255,.35) 66%, rgba(255,255,255,.35) calc(66% + 1px), transparent calc(66% + 1px)), linear-gradient(to bottom, transparent 33%, rgba(255,255,255,.35) 33%, rgba(255,255,255,.35) calc(33% + 1px), transparent calc(33% + 1px), transparent 66%, rgba(255,255,255,.35) 66%, rgba(255,255,255,.35) calc(66% + 1px), transparent calc(66% + 1px))}
+input[type=range]{width:100%;accent-color:var(--accent)}
 .pev{display:flex;flex-direction:column;gap:8px}
 .pev .up{color:var(--good);font-weight:700}.pev .down{color:var(--danger);font-weight:700}
 .mslots{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
@@ -1268,8 +1273,8 @@ const Media = {
     await new Promise((res, rej) => { const tx = this.db.transaction('m', 'readwrite'); const st = tx.objectStore('m'); val ? st.put(val, k) : st.delete(k);
       tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); });
     this.set(k, blob); },
-  html(k, extra=''){ const u = this.urls[k]; if (!u) return '';
-    return this.types[k].startsWith('video/') ? `<video class="pmedia" src="${u}" autoplay muted loop playsinline ${extra}></video>` : `<img class="pmedia" src="${u}" alt="">`; }
+  html(k, extra=''){ const u = this.urls[k]; if (!u) return ''; const st = frameStyle(k);
+    return `<span class="pmwrap">${this.types[k].startsWith('video/') ? `<video class="pmedia" data-k="${k}" src="${u}" autoplay muted loop playsinline ${st} ${extra}></video>` : `<img class="pmedia" data-k="${k}" src="${u}" alt="" ${st}>`}</span>`; }
 };
 // Picture slot (key i) shows on cards; animation slot (key 'a'+i) plays at the unlock. Each falls back to the other, then to the drawing.
 // FONTE_VERSION is YYYYMMDDhhmmss, set by build_app.py in the installable app only.
@@ -1277,6 +1282,39 @@ function appVersionLabel(){
   const v = String(window.FONTE_VERSION || ''), d = new Date(+v.slice(0,4), +v.slice(4,6) - 1, +v.slice(6,8), +v.slice(8,10), +v.slice(10,12));
   return 'Publiée le ' + d.toLocaleDateString('fr-FR', {day:'numeric', month:'long'}) + ' à ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
 }
+// Framing per visual: x/y = visible point in % (object-position), z = zoom factor.
+const frameOf = k => ({x:50, y:50, z:1, ...((S.settings.frames || {})[k] || {})});
+const frameCss = f => `object-position:${f.x}% ${f.y}%;transform:scale(${f.z});transform-origin:${f.x}% ${f.y}%`;
+const frameStyle = k => (S.settings.frames || {})[k] ? `style="${frameCss(frameOf(k))}"` : '';
+function setFrame(k, patch){
+  const f = {...frameOf(k), ...patch};
+  f.x = Math.max(0, Math.min(100, Math.round(f.x))); f.y = Math.max(0, Math.min(100, Math.round(f.y))); f.z = Math.max(1, Math.min(4, Math.round(f.z * 100) / 100));
+  S.settings.frames = {...(S.settings.frames || {}), [k]: f};
+  document.querySelectorAll(`.pmedia[data-k="${k}"]`).forEach(m => m.style.cssText = frameCss(f));
+  const out = document.getElementById('frVals'); if (out) out.textContent = `Horizontal ${f.x} % · Vertical ${f.y} % · Zoom ×${f.z.toFixed(2)}`;
+  ['frX','frY','frZ'].forEach((id, j) => { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = [f.x, f.y, Math.round(f.z * 100)][j]; });
+  save();
+}
+function openFrame(k){
+  const i = mediaForm(k), anim = typeof k === 'string', f = frameOf(k);
+  openSheet(() => `${sheetHead('Cadrer le visuel')}
+    <span class="small muted">${FORMS[i].n} · ${anim ? 'animation de déblocage' : 'image de l’accueil'}. Faites glisser l’image pour choisir la partie visible, et zoomez avec le curseur.</span>
+    <div class="frbox" id="frBox" data-k="${k}">${Media.html(k)}<span class="frgrid" aria-hidden="true"></span></div>
+    <div class="stack" style="gap:14px">
+      <label class="field"><span class="lbl">Zoom</span><input id="frZ" type="range" min="100" max="400" step="5" value="${Math.round(f.z*100)}" data-in="frZ" data-k="${k}"></label>
+      <label class="field"><span class="lbl">Horizontal</span><input id="frX" type="range" min="0" max="100" value="${f.x}" data-in="frX" data-k="${k}"></label>
+      <label class="field"><span class="lbl">Vertical</span><input id="frY" type="range" min="0" max="100" value="${f.y}" data-in="frY" data-k="${k}"></label>
+      <span class="small muted tab" id="frVals">Horizontal ${f.x} % · Vertical ${f.y} % · Zoom ×${f.z.toFixed(2)}</span></div>
+    <div class="grid2"><button class="btn" data-a="frReset" data-k="${k}">Réinitialiser</button><button class="btn primary" data-a="closeSheet">Terminé</button></div>`,
+    {onClose:() => { refreshSheet(); render(); }});
+}
+// Drag inside the framing box: moving the picture right shows more of its left side.
+let frDrag = null;
+document.addEventListener('pointerdown', ev => { const box = ev.target.closest && ev.target.closest('#frBox'); if (!box) return;
+  const k = mediaKey(box.dataset.k); frDrag = {k, x:ev.clientX, y:ev.clientY, f:frameOf(k), w:box.clientWidth, h:box.clientHeight}; box.setPointerCapture && box.setPointerCapture(ev.pointerId); ev.preventDefault(); });
+document.addEventListener('pointermove', ev => { if (!frDrag) return; const d = frDrag, sens = 100 / d.f.z;
+  setFrame(d.k, {x: d.f.x - (ev.clientX - d.x) / d.w * sens, y: d.f.y - (ev.clientY - d.y) / d.h * sens}); });
+['pointerup','pointercancel'].forEach(t => document.addEventListener(t, () => { frDrag = null; }));
 function mediaError(e){
   const n = e && e.name;
   if (n === 'QuotaExceededError') return 'Plus assez d’espace sur le téléphone pour ce fichier.';
@@ -1331,7 +1369,7 @@ function openPower(){
     ${ev.length ? `<div class="card stack"><h3 class="h3">Historique</h3><div class="pev">${ev.map(e => `<div class="row between small"><span class="muted" style="text-transform:capitalize">${new Date(e.t).toLocaleDateString('fr-FR',{weekday:'short', day:'numeric', month:'short'})}</span><span class="${e.d>0?'up':e.d<0?'down':''}">${e.d>0?'▲ +1':e.d<0?'▼ '+e.d:e.up?'= séance (sommet)':'= déjà au minimum'} · ${FORMS[e.lvl].n}</span></div>`).join('')}</div></div>` : ''}
     <div class="card stack"><h3 class="h3">Vos images</h3><span class="small muted">Pour chaque transformation : une image pour l’accueil et un GIF ou une courte vidéo pour l’animation de déblocage. Si un seul des deux est fourni, il sert partout. Vous pouvez aussi tout importer d’un coup avec un pack (Réglages). Les fichiers restent dans ce téléphone et ne sont jamais envoyés en ligne.</span></div>
     <div class="list">${FORMS.map((f,i) => `<div class="li plad ${i===P.level?'cur':''} ${i>P.level?'locked':''}" style="--c1:${f.c1};--c2:${f.c2}"><span class="pmini">${formVisual(i)}</span><span class="grow"><span class="t" style="display:block">${f.n}</span><span class="s" style="display:block;white-space:normal">${i>P.level ? 'Verrouillé · encore ' + (i-P.level) + ' séance' + (i-P.level>1?'s':'') : f.d}</span>
-      <span class="mslots">${[[i,'Image accueil'],['a'+i,'Animation']].map(([k,l]) => `<span class="mslot"><span class="lbl">${l}</span><span class="row" style="gap:6px"><label class="btn sm ghost" for="fm-${k}">${Media.urls[k]?'Changer':'Ajouter'}</label><input type="file" id="fm-${k}" data-media="${k}" accept="image/*,video/*" hidden>${Media.urls[k]?`<button class="btn sm ghost" data-a="delMedia" data-k="${k}" aria-label="Retirer ${l}">${I.x.replace('<svg','<svg width="14" height="14"')}</button>`:''}</span></span>`).join('')}</span>
+      <span class="mslots">${[[i,'Image accueil'],['a'+i,'Animation']].map(([k,l]) => `<span class="mslot"><span class="lbl">${l}</span><span class="row" style="gap:6px"><label class="btn sm ghost" for="fm-${k}">${Media.urls[k]?'Changer':'Ajouter'}</label><input type="file" id="fm-${k}" data-media="${k}" accept="image/*,video/*" hidden>${Media.urls[k]?`<button class="btn sm ghost" data-a="delMedia" data-k="${k}" aria-label="Retirer ${l}">${I.x.replace('<svg','<svg width="14" height="14"')}</button>`:''}</span>${Media.urls[k]?`<button class="btn sm ghost" data-a="openFrame" data-k="${k}">Cadrer</button>`:''}</span>`).join('')}</span>
       ${i>0?`<button class="btn sm ghost" style="margin-top:8px" data-a="previewPower" data-i="${i}">${I.play}Voir l’animation</button>`:''}</span>
       ${i===P.level?'<span class="pill acc">Actuel</span>':i<P.level?'<span class="pill good">Acquis</span>':''}</div>`).join('')}</div>`;
   });
@@ -1482,6 +1520,8 @@ const A = {
   putMedia:d => { const file = UI.pendingMedia, k = mediaKey(d.k); if (!file) return; closeSheet();
     Media.write(k, file).then(() => { refreshSheet(); render(); toast((typeof k === 'string' ? 'Animation' : 'Image') + ' ajoutée à ' + FORMS[mediaForm(k)].n + '.'); }).catch(e => toast(mediaError(e))); },
   previewPower:d => { const i = +d.i; ensureAudio(); playPowerUp(Math.max(0, i - 1), i, true); },
+  openFrame:d => openFrame(mediaKey(d.k)),
+  frReset:d => { const k = mediaKey(d.k); setFrame(k, {x:50, y:50, z:1}); const fr = {...S.settings.frames}; delete fr[k]; S.settings.frames = fr; save(); },
   delMedia:d => Media.write(mediaKey(d.k), null).then(() => { refreshSheet(); render(); toast('Image retirée.'); }).catch(() => toast('Impossible de retirer l’image.')),
   closePower:() => { const el = $('#powerup'); el.hidden = true; el.innerHTML = ''; el.classList.remove('run'); render(); },
   closeSheet:() => closeSheet(),
@@ -1615,6 +1655,9 @@ const IN = {
   rW:(v,d) => { UI.editR.exercises[+d.i].w = v.trim() === '' ? null : toKg(v); },
   rRest:(v,d) => { UI.editR.exercises[+d.i].rest = +v; },
   stName:v => { S.settings.name = v; save(); },
+  frX:(v,d) => setFrame(mediaKey(d.k), {x:+v}),
+  frY:(v,d) => setFrame(mediaKey(d.k), {y:+v}),
+  frZ:(v,d) => setFrame(mediaKey(d.k), {z:+v / 100}),
   rmW:v => { UI.rm.w = v; $('#rmOut').innerHTML = rmOut(calcRm()); },
   rmR:v => { UI.rm.r = v; $('#rmOut').innerHTML = rmOut(calcRm()); },
   plT:v => { UI.plate.t = v; $('#plOut').innerHTML = plateOut(); },
@@ -1686,7 +1729,7 @@ Store.connect();
 </script>
 
 <script>
-window.FONTE_VERSION = '20261109223113';
+window.FONTE_VERSION = '20261109223613';
 // Offline support: cache the app so it opens without network.
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // Ask the browser not to evict the workout log when space runs low.
