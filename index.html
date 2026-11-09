@@ -1204,7 +1204,7 @@ function openSettings(){
       <div class="grid2"><button class="btn" data-a="exportData">Exporter (JSON)</button><label class="btn" for="importFile">Importer</label></div>
       <input id="importFile" type="file" accept="application/json,.json" hidden data-in="importFile"></div>
     <div class="card stack"><b>Pack d’images des transformations</b><span class="small muted">Importe d’un coup les images et animations préparées pour chaque transformation. Elles restent dans ce téléphone.</span>
-      <label class="btn" for="packFile">Importer un pack</label><input id="packFile" type="file" accept=".fontepack,.json,application/json,application/octet-stream,*/*" hidden></div>
+      <label class="btn" for="packFile">Importer un pack ou une image</label><input id="packFile" type="file" accept=".fontepack,.json,application/json,application/octet-stream,*/*" hidden></div>
     <div class="card stack"><b>Données d’exemple</b><span class="small muted">8 semaines de séances Push / Pull / Legs et une courbe de poids, pour essayer les graphiques. Elles sont marquées « Exemple ».</span>
       ${hasSample?'<button class="btn danger" data-a="removeSample">Retirer les exemples</button>':'<button class="btn" data-a="loadSample">Charger les exemples</button>'}</div>
     <button class="btn danger block" data-a="wipe">Effacer toutes mes données</button>`; }, {onClose:render});
@@ -1259,13 +1259,30 @@ const Media = {
   open(){ if (this.db) return Promise.resolve(this.db); return new Promise((res, rej) => { try { const r = indexedDB.open('fonte-media', 1);
     r.onupgradeneeded = () => r.result.createObjectStore('m'); r.onsuccess = () => res(this.db = r.result); r.onerror = () => rej(r.error); } catch(e){ rej(e); } }); },
   async load(){ try { await this.open(); await new Promise(res => { const req = this.db.transaction('m').objectStore('m').openCursor();
-    req.onsuccess = () => { const c = req.result; if (c) { this.set(c.key, c.value); c.continue(); } else res(); }; req.onerror = () => res(); }); } catch(e){} },
+    req.onsuccess = () => { const c = req.result; if (c) { const v = c.value; this.set(c.key, v instanceof Blob ? v : (v && v.buf ? new Blob([v.buf], {type:v.type}) : null)); c.continue(); } else res(); }; req.onerror = () => res(); }); } catch(e){} },
   set(k, blob){ if (this.urls[k]) URL.revokeObjectURL(this.urls[k]); delete this.urls[k]; delete this.types[k]; if (blob) { this.urls[k] = URL.createObjectURL(blob); this.types[k] = blob.type || ''; } },
-  async write(k, blob){ await this.open(); await new Promise((res, rej) => { const tx = this.db.transaction('m', 'readwrite'); const st = tx.objectStore('m'); blob ? st.put(blob, k) : st.delete(k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); this.set(k, blob); },
+  async write(k, blob){
+    const val = blob ? {type:blob.type || '', buf: await blob.arrayBuffer()} : null;
+    await this.open();
+    await new Promise((res, rej) => { const tx = this.db.transaction('m', 'readwrite'); const st = tx.objectStore('m'); val ? st.put(val, k) : st.delete(k);
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); });
+    this.set(k, blob); },
   html(k, extra=''){ const u = this.urls[k]; if (!u) return '';
     return this.types[k].startsWith('video/') ? `<video class="pmedia" src="${u}" autoplay muted loop playsinline ${extra}></video>` : `<img class="pmedia" src="${u}" alt="">`; }
 };
 // Picture slot (key i) shows on cards; animation slot (key 'a'+i) plays at the unlock. Each falls back to the other, then to the drawing.
+function mediaError(e){
+  const n = e && e.name;
+  if (n === 'QuotaExceededError') return 'Plus assez d’espace sur le téléphone pour ce fichier.';
+  return 'Enregistrement impossible' + (n ? ' (' + n + ')' : '') + '. Réessayez, ou envoyez-moi ce message.';
+}
+function chooseMediaSlot(file){
+  if (file.size > 60 * 1024 * 1024) { toast('Fichier trop lourd (60 Mo maximum).'); return; }
+  UI.pendingMedia = file;
+  openSheet(() => `${sheetHead('Où mettre ce visuel ?')}<p class="muted" style="margin:0">Choisissez la transformation et l’emplacement pour « ${esc(file.name)} ».</p>
+    <div class="list">${FORMS.map((f,i) => `<div class="li"><span class="pmini" style="width:38px;height:46px;flex:none;border-radius:10px;background:var(--hero);display:block">${formVisual(i)}</span><span class="grow t">${f.n}</span>
+      <button class="btn sm ghost" data-a="putMedia" data-k="${i}">Accueil</button><button class="btn sm ghost" data-a="putMedia" data-k="a${i}">Animation</button></div>`).join('')}</div>`, {onClose:() => { UI.pendingMedia = null; }});
+}
 const formVisual = (i, cls='') => Media.urls[i] ? Media.html(i) : Media.urls['a' + i] ? Media.html('a' + i) : emblem(i, cls);
 const animVisual = (i, cls='') => Media.urls['a' + i] ? Media.html('a' + i) : formVisual(i, cls);
 const mediaKey = v => /^a\d+$/.test(v) ? v : +v;
@@ -1456,6 +1473,8 @@ const A = {
   prog:d => { UI.prog = d.p; render(); },
   settings:() => openSettings(),
   openPower:() => openPower(),
+  putMedia:d => { const file = UI.pendingMedia, k = mediaKey(d.k); if (!file) return; closeSheet();
+    Media.write(k, file).then(() => { refreshSheet(); render(); toast((typeof k === 'string' ? 'Animation' : 'Image') + ' ajoutée à ' + FORMS[mediaForm(k)].n + '.'); }).catch(e => toast(mediaError(e))); },
   previewPower:d => { const i = +d.i; ensureAudio(); playPowerUp(Math.max(0, i - 1), i, true); },
   delMedia:d => Media.write(mediaKey(d.k), null).then(() => { refreshSheet(); render(); toast('Image retirée.'); }).catch(() => toast('Impossible de retirer l’image.')),
   closePower:() => { const el = $('#powerup'); el.hidden = true; el.innerHTML = ''; el.classList.remove('run'); render(); },
@@ -1612,13 +1631,14 @@ document.addEventListener('change', ev => {
     const file = el.files[0], k = mediaKey(el.dataset.media), i = mediaForm(k); el.value = '';
     if (!/^(image|video)\//.test(file.type)) { toast('Choisissez une image, un GIF ou une vidéo.'); return; }
     if (file.size > 60 * 1024 * 1024) { toast('Fichier trop lourd (60 Mo maximum).'); return; }
-    Media.write(k, file).then(() => { refreshSheet(); render(); toast((typeof k === 'string' ? 'Animation' : 'Image') + ' ajoutée à ' + FORMS[i].n + '.'); }).catch(() => toast('Espace insuffisant pour enregistrer ce fichier.'));
+    Media.write(k, file).then(() => { refreshSheet(); render(); toast((typeof k === 'string' ? 'Animation' : 'Image') + ' ajoutée à ' + FORMS[i].n + '.'); }).catch(e => toast(mediaError(e)));
     return;
   }
   if (el.id === 'packFile' && el.files && el.files[0]) {
     const file = el.files[0]; el.value = '';
+    if (/^(image|video)\//.test(file.type) || /\.(gif|png|jpe?g|webp|heic|mp4|mov|webm)$/i.test(file.name)) { chooseMediaSlot(file); return; }
     file.text().then(async txt => {
-      const pack = JSON.parse(txt);
+      let pack; try { pack = JSON.parse(txt); } catch(e) { throw new Error('format'); }
       if (!pack || pack.app !== 'Fonte-pack' || !Array.isArray(pack.media)) throw new Error('format');
       let n = 0;
       for (const m of pack.media) {
@@ -1628,7 +1648,7 @@ document.addEventListener('change', ev => {
         n++;
       }
       refreshSheet(); render(); toast(n + ' visuel' + (n>1?'s':'') + ' importé' + (n>1?'s':'') + '.');
-    }).catch(e => toast(e && e.message === 'format' ? 'Ce fichier n’est pas un pack Fonte.' : 'Import impossible : espace insuffisant ou fichier abîmé.'));
+    }).catch(e => toast(e && e.message === 'format' ? 'Ce fichier n’est pas un pack Fonte (fonte-pack.json).' : mediaError(e)));
     return;
   }
   if (el.id === 'importFile' && el.files && el.files[0]) {
