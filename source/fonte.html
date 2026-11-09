@@ -380,6 +380,8 @@ table.pct td:last-child{text-align:right;font-weight:700}
 #powerup .pu-stage .pmedia{border-radius:26px;box-shadow:0 0 50px var(--c1), 0 0 120px color-mix(in srgb, var(--c2) 60%, transparent)}
 .pev{display:flex;flex-direction:column;gap:8px}
 .pev .up{color:var(--good);font-weight:700}.pev .down{color:var(--danger);font-weight:700}
+.mslots{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.mslot{display:flex;flex-direction:column;gap:4px;min-width:0}
 </style>
 
 <div id="app">
@@ -1185,6 +1187,8 @@ function openSettings(){
       <span class="small muted">${Store.mode==='db'?'Vos données sont enregistrées dans votre compte et vous suivent sur vos appareils.':'Vos données sont enregistrées dans ce navigateur. Exportez-les régulièrement pour ne rien perdre.'}</span>
       <div class="grid2"><button class="btn" data-a="exportData">Exporter (JSON)</button><label class="btn" for="importFile">Importer</label></div>
       <input id="importFile" type="file" accept="application/json,.json" hidden data-in="importFile"></div>
+    <div class="card stack"><b>Pack d’images des transformations</b><span class="small muted">Importe d’un coup les images et animations préparées pour chaque transformation. Elles restent dans ce téléphone.</span>
+      <label class="btn" for="packFile">Importer un pack</label><input id="packFile" type="file" accept=".fontepack,.json,application/json,application/octet-stream,*/*" hidden></div>
     <div class="card stack"><b>Données d’exemple</b><span class="small muted">8 semaines de séances Push / Pull / Legs et une courbe de poids, pour essayer les graphiques. Elles sont marquées « Exemple ».</span>
       ${hasSample?'<button class="btn danger" data-a="removeSample">Retirer les exemples</button>':'<button class="btn" data-a="loadSample">Charger les exemples</button>'}</div>
     <button class="btn danger block" data-a="wipe">Effacer toutes mes données</button>`; }, {onClose:render});
@@ -1245,7 +1249,11 @@ const Media = {
   html(k, extra=''){ const u = this.urls[k]; if (!u) return '';
     return this.types[k].startsWith('video/') ? `<video class="pmedia" src="${u}" autoplay muted loop playsinline ${extra}></video>` : `<img class="pmedia" src="${u}" alt="">`; }
 };
-const formVisual = (i, cls='') => Media.urls[i] ? Media.html(i) : emblem(i, cls);
+// Picture slot (key i) shows on cards; animation slot (key 'a'+i) plays at the unlock. Each falls back to the other, then to the drawing.
+const formVisual = (i, cls='') => Media.urls[i] ? Media.html(i) : Media.urls['a' + i] ? Media.html('a' + i) : emblem(i, cls);
+const animVisual = (i, cls='') => Media.urls['a' + i] ? Media.html('a' + i) : formVisual(i, cls);
+const mediaKey = v => /^a\d+$/.test(v) ? v : +v;
+const mediaForm = k => +String(k).replace('a', '');
 function emblem(i, cls=''){
   const f = FORMS[i], id = 'em' + i + cls.replace(/\W/g,'');
   const spikes = f.spikes === 2 ? 'M38 45 L29 31 L39 34 L35 18 L45 28 L48 9 L53 26 L62 13 L60 29 L71 23 L63 36 L69 43 L60 40 L50 36 L41 41 Z'
@@ -1282,10 +1290,10 @@ function openPower(){
       <li><b class="pd">▼</b><span>7 jours d’affilée sans séance : <b>−2 transformations</b>, puis encore −2 par semaine d’absence.</span></li></ul>
       <span class="small muted">Une seule montée par jour, même avec deux séances. La perte est appliquée le 8ᵉ jour sans séance.</span></div>
     ${ev.length ? `<div class="card stack"><h3 class="h3">Historique</h3><div class="pev">${ev.map(e => `<div class="row between small"><span class="muted" style="text-transform:capitalize">${new Date(e.t).toLocaleDateString('fr-FR',{weekday:'short', day:'numeric', month:'short'})}</span><span class="${e.d>0?'up':e.d<0?'down':''}">${e.d>0?'▲ +1':e.d<0?'▼ '+e.d:e.up?'= séance (sommet)':'= déjà au minimum'} · ${FORMS[e.lvl].n}</span></div>`).join('')}</div></div>` : ''}
-    <div class="card stack"><h3 class="h3">Vos images</h3><span class="small muted">Ajoutez une image, un GIF ou une courte vidéo pour chaque transformation. Elle remplace le dessin sur l’accueil et dans l’animation. Les fichiers restent dans ce téléphone et ne sont jamais envoyés en ligne.</span></div>
+    <div class="card stack"><h3 class="h3">Vos images</h3><span class="small muted">Pour chaque transformation : une image pour l’accueil et un GIF ou une courte vidéo pour l’animation de déblocage. Si un seul des deux est fourni, il sert partout. Vous pouvez aussi tout importer d’un coup avec un pack (Réglages). Les fichiers restent dans ce téléphone et ne sont jamais envoyés en ligne.</span></div>
     <div class="list">${FORMS.map((f,i) => `<div class="li plad ${i===P.level?'cur':''} ${i>P.level?'locked':''}" style="--c1:${f.c1};--c2:${f.c2}"><span class="pmini">${formVisual(i)}</span><span class="grow"><span class="t" style="display:block">${f.n}</span><span class="s" style="display:block;white-space:normal">${i>P.level ? 'Verrouillé · encore ' + (i-P.level) + ' séance' + (i-P.level>1?'s':'') : f.d}</span>
-      <span class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><label class="btn sm ghost" for="fm-${i}">${Media.urls[i]?'Changer':'Ajouter une image'}</label><input type="file" id="fm-${i}" data-media="${i}" accept="image/*,video/*" hidden>
-      ${Media.urls[i]?`<button class="btn sm ghost" data-a="delMedia" data-i="${i}">Retirer</button>`:''}${i>0?`<button class="btn sm ghost" data-a="previewPower" data-i="${i}">${I.play}Voir</button>`:''}</span></span>
+      <span class="mslots">${[[i,'Image accueil'],['a'+i,'Animation']].map(([k,l]) => `<span class="mslot"><span class="lbl">${l}</span><span class="row" style="gap:6px"><label class="btn sm ghost" for="fm-${k}">${Media.urls[k]?'Changer':'Ajouter'}</label><input type="file" id="fm-${k}" data-media="${k}" accept="image/*,video/*" hidden>${Media.urls[k]?`<button class="btn sm ghost" data-a="delMedia" data-k="${k}" aria-label="Retirer ${l}">${I.x.replace('<svg','<svg width="14" height="14"')}</button>`:''}</span></span>`).join('')}</span>
+      ${i>0?`<button class="btn sm ghost" style="margin-top:8px" data-a="previewPower" data-i="${i}">${I.play}Voir l’animation</button>`:''}</span>
       ${i===P.level?'<span class="pill acc">Actuel</span>':i<P.level?'<span class="pill good">Acquis</span>':''}</div>`).join('')}</div>`;
   });
 }
@@ -1319,7 +1327,7 @@ function playPowerUp(from, to, preview){
   const parts = Array.from({length:34}, (_,k) => `<i style="left:${(k*37)%100}%;animation-delay:${((k*13)%20)/10}s;animation-duration:${1.4 + (k%5)*.25}s;width:${3+k%4}px;height:${10+(k%5)*6}px"></i>`).join('');
   el.style.setProperty('--c1', f.c1); el.style.setProperty('--c2', f.c2);
   el.innerHTML = `<div class="pu-bg"></div><div class="pu-parts">${parts}</div><div class="pu-flash"></div>
-    <div class="pu-stage"><div class="pu-ring"></div><div class="pu-old">${formVisual(from)}</div><div class="pu-new">${formVisual(to,'live')}</div></div>
+    <div class="pu-stage"><div class="pu-ring"></div><div class="pu-old">${formVisual(from)}</div><div class="pu-new">${animVisual(to,'live')}</div></div>
     <div class="pu-txt"><span class="pu-kicker">${preview ? 'Aperçu de l’animation' : 'Nouvelle transformation débloquée'}</span><h2 class="pu-name">${f.n}</h2><p>${f.d}</p><span class="pu-lvl">Niveau ${to}/${MAXF}${to - from > 1 ? ' · +' + (to - from) + ' niveaux' : ''}</span>
     <button class="btn primary xl" data-a="closePower">Continuer</button></div>`;
   el.hidden = false; el.classList.remove('run'); void el.offsetWidth; el.classList.add('run');
@@ -1433,7 +1441,7 @@ const A = {
   settings:() => openSettings(),
   openPower:() => openPower(),
   previewPower:d => { const i = +d.i; ensureAudio(); playPowerUp(Math.max(0, i - 1), i, true); },
-  delMedia:d => Media.write(+d.i, null).then(() => { refreshSheet(); render(); toast('Image retirée.'); }).catch(() => toast('Impossible de retirer l’image.')),
+  delMedia:d => Media.write(mediaKey(d.k), null).then(() => { refreshSheet(); render(); toast('Image retirée.'); }).catch(() => toast('Impossible de retirer l’image.')),
   closePower:() => { const el = $('#powerup'); el.hidden = true; el.innerHTML = ''; el.classList.remove('run'); render(); },
   closeSheet:() => closeSheet(),
   confirmOk:() => { const s = sheets[sheets.length-1]; closeSheet(); s && s.onOk && s.onOk(); },
@@ -1585,10 +1593,26 @@ document.addEventListener('change', ev => {
   if (el.dataset && el.dataset.in === 'rRest') IN.rRest(el.value, el.dataset);
   if (el.dataset && el.dataset.in === 'plBar') IN.plBar(el.value);
   if (el.dataset && el.dataset.media != null && el.files && el.files[0]) {
-    const file = el.files[0], i = +el.dataset.media; el.value = '';
+    const file = el.files[0], k = mediaKey(el.dataset.media), i = mediaForm(k); el.value = '';
     if (!/^(image|video)\//.test(file.type)) { toast('Choisissez une image, un GIF ou une vidéo.'); return; }
     if (file.size > 60 * 1024 * 1024) { toast('Fichier trop lourd (60 Mo maximum).'); return; }
-    Media.write(i, file).then(() => { refreshSheet(); render(); toast('Image ajoutée à ' + FORMS[i].n + '.'); }).catch(() => toast('Espace insuffisant pour enregistrer ce fichier.'));
+    Media.write(k, file).then(() => { refreshSheet(); render(); toast((typeof k === 'string' ? 'Animation' : 'Image') + ' ajoutée à ' + FORMS[i].n + '.'); }).catch(() => toast('Espace insuffisant pour enregistrer ce fichier.'));
+    return;
+  }
+  if (el.id === 'packFile' && el.files && el.files[0]) {
+    const file = el.files[0]; el.value = '';
+    file.text().then(async txt => {
+      const pack = JSON.parse(txt);
+      if (!pack || pack.app !== 'Fonte-pack' || !Array.isArray(pack.media)) throw new Error('format');
+      let n = 0;
+      for (const m of pack.media) {
+        const bin = atob(m.data), bytes = new Uint8Array(bin.length);
+        for (let j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
+        await Media.write(m.slot === 'anim' ? 'a' + m.form : +m.form, new Blob([bytes], {type:m.type}));
+        n++;
+      }
+      refreshSheet(); render(); toast(n + ' visuel' + (n>1?'s':'') + ' importé' + (n>1?'s':'') + '.');
+    }).catch(e => toast(e && e.message === 'format' ? 'Ce fichier n’est pas un pack Fonte.' : 'Import impossible : espace insuffisant ou fichier abîmé.'));
     return;
   }
   if (el.id === 'importFile' && el.files && el.files[0]) {
