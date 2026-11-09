@@ -1203,59 +1203,66 @@ function openSettings(){
 
 
 /* ---------- Transformations (one step per training day, two steps lost per idle week) ---------- */
-// Ordered by power. m = index whose pictures the form shares (all Kaioken levels share one set, Blue Kaioken another).
-const mixHex = (a, b, t) => '#' + [0,2,4].map(i => Math.round(parseInt(a.slice(1+i,3+i),16)*(1-t) + parseInt(b.slice(1+i,3+i),16)*t).toString(16).padStart(2,'0')).join('');
+// Ordered by power. m = index whose pictures the form shares; cost = training days needed to reach it from the previous form.
 const FORMS = [
- {n:'Forme de base', c1:'#AEB6C6', c2:'#5D6577', hair:'#14161D', d:'Le point de départ. Chaque séance compte.'},
- ...Array.from({length:20}, (_, k) => { const x = k + 1, t = k / 19;
-   return {n:'Kaioken ×' + x, m:1, c1:mixHex('#FF8F70', '#FF2B2B', t), c2:mixHex('#C0121F', '#6E000C', t), hair:'#14161D', bolts: x >= 10 ? '#FFD3CC' : null,
-     d: x === 1 ? 'Une aura rouge s’allume : la régularité commence à payer.' : x < 10 ? `Puissance multipliée par ${x}. Le corps encaisse.` : x < 20 ? `Kaioken ×${x} : la limite du corps approche.` : 'Kaioken ×20 : tout donner, sans rien retenir.'}; }),
- {n:'Faux Super Saiyan', c1:'#FFE7A0', c2:'#B8862E', hair:'#3A2A14', spikes:2, d:'Une colère brute qui annonce le grand éveil.'},
- {n:'Super Saiyan', c1:'#FFE866', c2:'#F5A300', hair:'#FFD42A', spikes:2, d:'Le premier grand cap. Cheveux dorés, puissance multipliée.'},
- {n:'Super Saiyan grade 2', c1:'#FFEA70', c2:'#E89A00', hair:'#FFD42A', spikes:2, d:'Plus de muscle, plus de force brute.'},
- {n:'Super Saiyan grade 3', c1:'#FFE35A', c2:'#D98800', hair:'#FFCC1A', spikes:2, d:'Une masse énorme. Puissant, mais lent.'},
- {n:'Super Saiyan maîtrisé', c1:'#FFF2A0', c2:'#F0B000', hair:'#FFDD44', spikes:2, d:'La forme devenue naturelle, sans effort.'},
- {n:'Super Saiyan 2', c1:'#FFF08A', c2:'#F5B800', hair:'#FFD42A', spikes:2, bolts:'#BFE9FF', d:'Des éclairs crépitent autour de vous. Rien ne vous arrête.'},
- {n:'Super Saiyan 3', c1:'#FFD84A', c2:'#E08A00', hair:'#FFC400', spikes:2, long:true, bolts:'#BFE9FF', d:'Une crinière jusqu’au bas du dos. Une discipline rare.'},
- {n:'Super Saiyan 4', c1:'#FFB066', c2:'#C2361F', hair:'#14161D', spikes:2, long:true, d:'La force sauvage, enfin maîtrisée.'},
- {n:'Super Saiyan God', c1:'#FF7A92', c2:'#D1123F', hair:'#E0244A', spikes:1, d:'Une énergie divine, calme et brûlante.'},
- {n:'Super Saiyan Blue', c1:'#7BEFFF', c2:'#1C7BFF', hair:'#3FC8FF', spikes:2, d:'La maîtrise totale de l’énergie divine.'},
- {n:'Super Saiyan Blue Kaioken', m:31, c1:'#7BEFFF', c2:'#D1123F', hair:'#3FC8FF', spikes:2, d:'Le divin et le Kaioken réunis.'},
- {n:'Super Saiyan Blue Kaioken ×10', m:31, c1:'#9AF2FF', c2:'#B00C2A', hair:'#3FC8FF', spikes:2, bolts:'#FFD3CC', d:'Un risque énorme pour une puissance énorme.'},
- {n:'Super Saiyan Blue Kaioken ×20', m:31, c1:'#C2F7FF', c2:'#8A0018', hair:'#3FC8FF', spikes:2, bolts:'#FFFFFF', d:'Au-delà de toute limite raisonnable.'},
- {n:'Ultra Instinct (Signe)', c1:'#D9E2FF', c2:'#6B7BD6', hair:'#23283B', spikes:1, sparks:true, d:'Le corps bouge tout seul. L’entraînement est devenu un réflexe.'},
- {n:'Ultra Instinct Maîtrisé', c1:'#FFFFFF', c2:'#9FB0E8', hair:'#E8EDF7', spikes:1, sparks:true, d:'Le sommet. Gardez le rythme pour rester ici.'},
+ {n:'Forme de base', cost:0, c1:'#AEB6C6', c2:'#5D6577', hair:'#14161D', d:'Le point de départ. Chaque séance compte.'},
+ ...[1, 2, 3, 4, 5, 10, 20].map((x, k, all) => ({n:'Kaioken ×' + x, m:1, cost: x <= 5 ? 1 : 2,
+   c1: ['#FF9070','#FF8063','#FF7056','#FF6049','#FF503C','#FF3A30','#FF2424'][k], c2: ['#C0121F','#B3101D','#A60E1B','#990C19','#8C0A17','#7D0614','#6E000C'][k],
+   hair:'#14161D', bolts: x >= 10 ? '#FFD3CC' : null,
+   d: x === 1 ? 'Une aura rouge s’allume : la régularité commence à payer.' : x <= 5 ? `Puissance multipliée par ${x}. Le corps encaisse.` : x === 10 ? 'Kaioken ×10 : la limite du corps approche.' : 'Kaioken ×20 : tout donner, sans rien retenir.'})),
+ {n:'Super Saiyan', cost:3, c1:'#FFE866', c2:'#F5A300', hair:'#FFD42A', spikes:2, d:'Le premier grand cap. Cheveux dorés, puissance multipliée.'},
+ {n:'Super Saiyan 2', cost:3, c1:'#FFF08A', c2:'#F5B800', hair:'#FFD42A', spikes:2, bolts:'#BFE9FF', d:'Des éclairs crépitent autour de vous. Rien ne vous arrête.'},
+ {n:'Super Saiyan 3', cost:3, c1:'#FFD84A', c2:'#E08A00', hair:'#FFC400', spikes:2, long:true, bolts:'#BFE9FF', d:'Une crinière jusqu’au bas du dos. Une discipline rare.'},
+ {n:'Super Saiyan 4', cost:3, c1:'#FFB066', c2:'#C2361F', hair:'#14161D', spikes:2, long:true, d:'La force sauvage, enfin maîtrisée.'},
+ {n:'Super Saiyan God', cost:4, c1:'#FF7A92', c2:'#D1123F', hair:'#E0244A', spikes:1, d:'Une énergie divine, calme et brûlante.'},
+ {n:'Super Saiyan Blue', cost:4, c1:'#7BEFFF', c2:'#1C7BFF', hair:'#3FC8FF', spikes:2, d:'La maîtrise totale de l’énergie divine.'},
+ {n:'Super Saiyan Blue Kaioken', m:14, cost:4, c1:'#7BEFFF', c2:'#D1123F', hair:'#3FC8FF', spikes:2, d:'Le divin et le Kaioken réunis.'},
+ {n:'Super Saiyan Blue Kaioken ×10', m:14, cost:5, c1:'#9AF2FF', c2:'#B00C2A', hair:'#3FC8FF', spikes:2, bolts:'#FFD3CC', d:'Un risque énorme pour une puissance énorme.'},
+ {n:'Super Saiyan Blue Kaioken ×20', m:14, cost:5, c1:'#C2F7FF', c2:'#8A0018', hair:'#3FC8FF', spikes:2, bolts:'#FFFFFF', d:'Au-delà de toute limite raisonnable.'},
+ {n:'Super Saiyan légendaire', cost:6, c1:'#B6FF8A', c2:'#1F9E3A', hair:'#D6FF6A', spikes:2, long:true, bolts:'#E8FFD0', d:'Une puissance sans fin qui déborde de partout.'},
+ {n:'Ultra Instinct (Signe)', cost:7, c1:'#D9E2FF', c2:'#6B7BD6', hair:'#23283B', spikes:1, sparks:true, d:'Le corps bouge tout seul. L’entraînement est devenu un réflexe.'},
+ {n:'Ultra Instinct Maîtrisé', cost:9, c1:'#FFFFFF', c2:'#9FB0E8', hair:'#E8EDF7', spikes:1, sparks:true, d:'Le sommet. Gardez le rythme pour rester ici.'},
 ];
-// Old 9-form list -> new index (pictures and framing follow their form).
-const FORMS_V1 = [0, 1, 22, 26, 27, 29, 30, 34, 35];
+// Earlier lists -> current index (pictures and framing follow their form; forms that no longer exist are dropped).
+const FORMS_FROM = {
+  1: [0, 1, 8, 9, 10, 12, 13, 18, 19],
+  2: [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, null, 8, null, null, null, 9, 10, 11, 12, 13, 14, 14, 14, 18, 19],
+};
+// Days of training needed to reach each form from zero.
+const STEPS = FORMS.reduce((a, f, i) => (a.push(i ? a[i-1] + f.cost : 0), a), []);
+const levelOf = pts => { let l = 0; while (l < FORMS.length - 1 && STEPS[l+1] <= pts) l++; return l; };
 const MAXF = FORMS.length - 1;
 const dayKey = t => { const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); };
 const dayDiff = (a, b) => Math.round((b - a) / DAY);
 const addDays = (t, n) => dayKey(t + n*DAY + 12*3600e3);
-// Rules: +1 form per day with a session; every 7 full days without a session costs 2 forms.
+// Rules: each day with a session earns 1 point; higher forms cost more points; every 7 full days without a session costs 2 forms.
 function powerState(){
   const days = [...new Set(S.workouts.map(w => dayKey(w.start)))].sort((a,b) => a - b);
-  const today = dayKey(Date.now()), events = [];
-  let lvl = 0, prev = null;
+  const today = dayKey(Date.now()), events = [], top = STEPS[MAXF];
+  let pts = 0, prev = null;
   const drop = (from, to) => { const pen = Math.floor((dayDiff(from, to) - 1) / 7);
-    for (let k = 1; k <= pen; k++) { const b = lvl; lvl = Math.max(0, lvl - 2); events.push({t:addDays(from, 7*k + 1), d:lvl - b, lvl}); } };
+    for (let k = 1; k <= pen; k++) { const b = levelOf(pts), l = Math.max(0, b - 2); pts = STEPS[l]; events.push({t:addDays(from, 7*k + 1), d:l - b, lvl:l}); } };
   for (const d of days) {
     if (prev != null) drop(prev, d);
-    const b = lvl; lvl = Math.min(MAXF, lvl + 1); events.push({t:d, d:lvl - b, lvl, up:true}); prev = d;
+    const b = levelOf(pts); pts = Math.min(top, pts + 1); const l = levelOf(pts);
+    events.push({t:d, d:l - b, lvl:l, up:true, pts}); prev = d;
   }
   if (prev != null) drop(prev, today);
+  const level = levelOf(pts);
   let nextDrop = null;
   if (prev != null) { const done = Math.max(0, Math.floor((dayDiff(prev, today) - 1) / 7)); nextDrop = addDays(prev, 7*(done + 1) + 1); }
-  return {level:lvl, events, last:prev, today, nextDrop, trainedToday: prev === today};
+  const need = level < MAXF ? FORMS[level + 1].cost : 0, have = level < MAXF ? pts - STEPS[level] : 0;
+  return {level, pts, need, have, events, last:prev, today, nextDrop, trainedToday: prev === today};
 }
 function powerStatus(P){
-  const nxt = FORMS[Math.min(MAXF, P.level + 1)];
+  const nxt = FORMS[Math.min(MAXF, P.level + 1)], rest = P.need - P.have;
   const left = P.nextDrop ? dayDiff(P.today, P.nextDrop) : null;
   const deadline = P.nextDrop ? new Date(addDays(P.nextDrop, -1)).toLocaleDateString('fr-FR',{weekday:'long', day:'numeric', month:'long'}) : '';
+  const toGo = P.level === MAXF ? '' : `Encore ${rest} séance${rest>1?'s':''} pour ${nxt.n}.`;
   if (P.last == null) return {tone:'keep', txt:`Votre première séance débloque ${nxt.n}.`, left};
-  if (P.trainedToday) return {tone:'up', txt: P.level === MAXF ? 'Séance du jour validée. Vous êtes au sommet.' : `Séance du jour validée. Prochaine séance : ${nxt.n}.`, left};
-  if (left <= 2 && P.level > 0) return {tone:'down', txt:`Attention : sans séance d’ici ${deadline}, vous perdez 2 transformations.`, left};
-  return {tone:'keep', txt: P.level === MAXF ? `Au sommet. Revenez avant ${deadline} pour y rester.` : `Prochaine séance : ${nxt.n}. À faire avant ${deadline}.`, left};
+  if (!P.trainedToday && left <= 2 && P.level > 0) return {tone:'down', txt:`Attention : sans séance d’ici ${deadline}, vous perdez 2 transformations.`, left};
+  if (P.trainedToday) return {tone:'up', txt: P.level === MAXF ? 'Séance du jour validée. Vous êtes au sommet.' : 'Séance du jour validée. ' + toGo, left};
+  return {tone:'keep', txt: P.level === MAXF ? `Au sommet. Revenez avant ${deadline} pour y rester.` : toGo + ` Prochaine séance avant ${deadline}.`, left};
 }
 
 /* Your own picture, GIF or video per form, kept on this device only (IndexedDB). */
@@ -1267,12 +1274,15 @@ const Media = {
     const rows = await new Promise(res => { const out = [], req = this.db.transaction('m').objectStore('m').openCursor();
       req.onsuccess = () => { const c = req.result; if (c) { out.push([c.key, c.value]); c.continue(); } else res(out); }; req.onerror = () => res(out); });
     let list = rows;
-    if (S.settings.formsV !== 2) {
-      const remap = k => { const anim = typeof k === 'string', i = +String(k).replace('a', ''); const n = FORMS_V1[i] ?? i; return anim ? 'a' + n : n; };
-      list = rows.map(([k, v]) => [remap(k), v]);
+    if (S.settings.formsV !== 3) {
+      const from = FORMS_FROM[S.settings.formsV === 2 ? 2 : 1];
+      const remap = k => { const anim = typeof k === 'string', i = +String(k).replace('a', ''); const n = i < from.length ? from[i] : null; return n == null ? null : (anim ? 'a' + n : n); };
+      // Keep the first picture that lands on each new slot (all old Kaioken levels collapse onto one).
+      const seen = new Set(); list = [];
+      rows.forEach(([k, v]) => { const n = remap(k); if (n != null && !seen.has(String(n))) { seen.add(String(n)); list.push([n, v]); } });
       if (rows.length) await new Promise((res, rej) => { const tx = this.db.transaction('m', 'readwrite'), st = tx.objectStore('m'); st.clear(); list.forEach(([k, v]) => st.put(v, k)); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
-      const fr = {}; Object.entries(S.settings.frames || {}).forEach(([k, v]) => { fr[remap(/^a/.test(k) ? k : +k)] = v; });
-      S.settings.frames = fr; S.settings.formsV = 2; save();
+      const fr = {}; Object.entries(S.settings.frames || {}).forEach(([k, v]) => { const n = remap(/^a/.test(k) ? k : +k); if (n != null && !(n in fr)) fr[n] = v; });
+      S.settings.frames = fr; S.settings.formsV = 3; save();
     }
     list.forEach(([k, v]) => this.set(k, v instanceof Blob ? v : (v && v.buf ? new Blob([v.buf], {type:v.type}) : null)));
   } catch(e){} },
@@ -1334,7 +1344,7 @@ function chooseMediaSlot(file){
   if (file.size > 60 * 1024 * 1024) { toast('Fichier trop lourd (60 Mo maximum).'); return; }
   UI.pendingMedia = file;
   openSheet(() => `${sheetHead('Où mettre ce visuel ?')}<p class="muted" style="margin:0">Choisissez la transformation et l’emplacement pour « ${esc(file.name)} ».</p>
-    <div class="list">${FORMS.map((f,i) => mk(i) !== i ? '' : `<div class="li"><span class="pmini" style="width:38px;height:46px;flex:none;border-radius:10px;background:var(--hero);display:block">${formVisual(i)}</span><span class="grow t">${i === 1 ? 'Kaioken (×1 à ×20)' : i === 31 ? 'Blue Kaioken (×1, ×10, ×20)' : f.n}</span>
+    <div class="list">${FORMS.map((f,i) => mk(i) !== i ? '' : `<div class="li"><span class="pmini" style="width:38px;height:46px;flex:none;border-radius:10px;background:var(--hero);display:block">${formVisual(i)}</span><span class="grow t">${i === 1 ? 'Kaioken (×1 à ×20)' : i === 14 ? 'Blue Kaioken (×1, ×10, ×20)' : f.n}</span>
       <button class="btn sm ghost" data-a="putMedia" data-k="${i}">Accueil</button><button class="btn sm ghost" data-a="putMedia" data-k="a${i}">Animation</button></div>`).join('')}</div>`, {onClose:() => { UI.pendingMedia = null; }});
 }
 const mk = i => (FORMS[i] && FORMS[i].m != null) ? FORMS[i].m : i;
@@ -1360,11 +1370,11 @@ function emblem(i, cls=''){
 }
 function powerCard(){
   const P = powerState(), f = FORMS[P.level], st = powerStatus(P);
-  const pct = st.left == null ? 100 : Math.max(4, Math.min(100, st.left / 8 * 100));
+  const pct = P.level === MAXF ? 100 : Math.max(4, P.have / P.need * 100);
   return `<button class="pcard" data-a="openPower" style="--c1:${f.c1};--c2:${f.c2}">
     <span class="pemb">${formVisual(P.level, 'live')}</span>
     <span class="pbody"><span class="lbl">Transformation · niveau ${P.level}/${MAXF}</span><span class="pname">${f.n}</span>
-      <span class="pmeter" title="Temps avant de perdre 2 transformations"><i style="width:${pct}%"></i></span>
+      <span class="pmeter" title="Progression vers la forme suivante">${P.level < MAXF ? Array.from({length:P.need - 1}, (_, k) => `<b style="left:${(k+1)/P.need*100}%"></b>`).join('') : ''}<i style="width:${pct}%"></i></span>
       <span class="pst ${st.tone}">${st.txt}</span></span></button>`;
 }
 function openPower(){
@@ -1374,12 +1384,12 @@ function openPower(){
     return `${sheetHead('Transformations')}
     <div class="pcard big" style="--c1:${cur.c1};--c2:${cur.c2}"><span class="pemb">${formVisual(P.level,'live')}</span><span class="pbody"><span class="lbl">Niveau ${P.level}/${MAXF}</span><span class="pname">${cur.n}</span><span class="pst ${st.tone}">${st.txt}</span></span></div>
     <div class="card stack"><h3 class="h3">Les règles</h3><ul class="prules">
-      <li><b class="pu">▲</b><span>Chaque jour où vous faites une séance : <b>+1 transformation</b>.</span></li>
+      <li><b class="pu">▲</b><span>Chaque jour où vous faites une séance compte. Les premières formes demandent <b>1 séance</b>, puis il en faut de plus en plus : jusqu’à <b>${FORMS[MAXF].cost} séances</b> pour la dernière.</span></li>
       <li><b class="pd">▼</b><span>7 jours d’affilée sans séance : <b>−2 transformations</b>, puis encore −2 par semaine d’absence.</span></li></ul>
-      <span class="small muted">Une seule montée par jour, même avec deux séances. La perte est appliquée le 8ᵉ jour sans séance.</span></div>
-    ${ev.length ? `<div class="card stack"><h3 class="h3">Historique</h3><div class="pev">${ev.map(e => `<div class="row between small"><span class="muted" style="text-transform:capitalize">${new Date(e.t).toLocaleDateString('fr-FR',{weekday:'short', day:'numeric', month:'short'})}</span><span class="${e.d>0?'up':e.d<0?'down':''}">${e.d>0?'▲ +1':e.d<0?'▼ '+e.d:e.up?'= séance (sommet)':'= déjà au minimum'} · ${FORMS[e.lvl].n}</span></div>`).join('')}</div></div>` : ''}
+      <span class="small muted">Une seule séance comptée par jour, même avec deux séances. Une perte vous ramène au début de la forme atteinte. Elle est appliquée le 8ᵉ jour sans séance. Total pour tout débloquer : ${STEPS[MAXF]} jours d’entraînement.</span></div>
+    ${ev.length ? `<div class="card stack"><h3 class="h3">Historique</h3><div class="pev">${ev.map(e => `<div class="row between small"><span class="muted" style="text-transform:capitalize">${new Date(e.t).toLocaleDateString('fr-FR',{weekday:'short', day:'numeric', month:'short'})}</span><span class="${e.d>0?'up':e.d<0?'down':''}">${e.d>0?'▲ Nouvelle forme':e.d<0?'▼ '+e.d+' formes':e.up?(e.lvl===MAXF?'= séance (sommet)':'+1 séance ('+(e.pts-STEPS[e.lvl])+'/'+FORMS[e.lvl+1].cost+')'):'= déjà au minimum'} · ${FORMS[e.lvl].n}</span></div>`).join('')}</div></div>` : ''}
     <div class="card stack"><h3 class="h3">Vos images</h3><span class="small muted">Pour chaque transformation : une image pour l’accueil et un GIF ou une courte vidéo pour l’animation de déblocage. Si un seul des deux est fourni, il sert partout. Vous pouvez aussi tout importer d’un coup avec un pack (Réglages). Les fichiers restent dans ce téléphone et ne sont jamais envoyés en ligne.</span></div>
-    <div class="list">${FORMS.map((f,i) => `<div class="li plad ${i===P.level?'cur':''} ${i>P.level?'locked':''}" style="--c1:${f.c1};--c2:${f.c2}"><span class="pmini">${formVisual(i)}</span><span class="grow"><span class="t" style="display:block">${f.n}</span><span class="s" style="display:block;white-space:normal">${i>P.level ? 'Verrouillé · encore ' + (i-P.level) + ' séance' + (i-P.level>1?'s':'') : f.d}</span><span class="small muted">Niveau ${i}</span>
+    <div class="list">${FORMS.map((f,i) => `<div class="li plad ${i===P.level?'cur':''} ${i>P.level?'locked':''}" style="--c1:${f.c1};--c2:${f.c2}"><span class="pmini">${formVisual(i)}</span><span class="grow"><span class="t" style="display:block">${f.n}</span><span class="s" style="display:block;white-space:normal">${i>P.level ? 'Verrouillé · encore ' + (STEPS[i]-P.pts) + ' séance' + (STEPS[i]-P.pts>1?'s':'') : f.d}</span><span class="small muted">Niveau ${i}${i ? ' · ' + f.cost + ' séance' + (f.cost>1?'s':'') + ' pour l’atteindre' : ''}</span>
       ${mk(i) !== i ? `<span class="small muted" style="display:block;margin-top:6px">Visuels partagés avec ${FORMS[mk(i)].n}.</span>` : `<span class="mslots">${[[i,'Image accueil'],['a'+i,'Animation']].map(([k,l]) => `<span class="mslot"><span class="lbl">${l}</span><span class="row" style="gap:6px"><label class="btn sm ghost" for="fm-${k}">${Media.urls[k]?'Changer':'Ajouter'}</label><input type="file" id="fm-${k}" data-media="${k}" accept="image/*,video/*" hidden>${Media.urls[k]?`<button class="btn sm ghost" data-a="delMedia" data-k="${k}" aria-label="Retirer ${l}">${I.x.replace('<svg','<svg width="14" height="14"')}</button>`:''}</span>${Media.urls[k]?`<button class="btn sm ghost" data-a="openFrame" data-k="${k}">Cadrer</button>`:''}</span>`).join('')}</span>`}
       ${i>0?`<button class="btn sm ghost" style="margin-top:8px" data-a="previewPower" data-i="${i}">${I.play}Voir l’animation</button>`:''}</span>
       ${i===P.level?'<span class="pill acc">Actuel</span>':i<P.level?'<span class="pill good">Acquis</span>':''}</div>`).join('')}</div>`;
@@ -1388,14 +1398,19 @@ function openPower(){
 // Compares the computed level to the last one shown and plays the matching moment.
 function checkPower(silent){
   const P = powerState();
-  if (S.settings.powerRules !== 3) { S.settings.powerRules = 3; S.settings.seenLvl = P.level; save(); return; }
-  const seen = S.settings.seenLvl;
-  if (seen == null || silent) { if (seen !== P.level) { S.settings.seenLvl = P.level; save(); } return; }
-  if (P.level === seen) return;
+  if (S.settings.powerRules !== 4) { S.settings.powerRules = 4; S.settings.seenLvl = P.level; S.settings.seenPts = P.pts; save(); return; }
+  const seen = S.settings.seenLvl, seenPts = S.settings.seenPts;
+  if (seen == null || silent) { if (seen !== P.level || seenPts !== P.pts) { S.settings.seenLvl = P.level; S.settings.seenPts = P.pts; save(); } return; }
+  if (P.level === seen) {
+    if (P.pts > (seenPts ?? 0) && P.level < MAXF) { S.settings.seenPts = P.pts; save(); setTimeout(() => toast(`+1 séance vers ${FORMS[P.level + 1].n} (${P.have}/${P.need})`), 600); }
+    else if (P.pts !== seenPts) { S.settings.seenPts = P.pts; save(); }
+    return;
+  }
+  S.settings.seenPts = P.pts;
   S.settings.seenLvl = P.level; save();
   if (P.level > seen) playPowerUp(seen, P.level);
   else openSheet(() => `${sheetHead('Transformation perdue')}<div class="pcard big" style="--c1:${FORMS[P.level].c1};--c2:${FORMS[P.level].c2}"><span class="pemb">${formVisual(P.level,'live')}</span><span class="pbody"><span class="lbl">Retour au niveau ${P.level}</span><span class="pname">${FORMS[P.level].n}</span></span></div>
-    <p class="muted" style="margin:0">Une semaine sans séance coûte 2 transformations. Votre prochaine séance vous fait remonter en ${FORMS[Math.min(MAXF,P.level+1)].n}.</p><button class="btn primary block" data-a="closeSheet">Compris, on repart</button>`);
+    <p class="muted" style="margin:0">Une semaine sans séance coûte 2 transformations. Encore ${P.need - P.have} séance${P.need - P.have > 1 ? 's' : ''} pour retrouver ${FORMS[Math.min(MAXF,P.level+1)].n}.</p><button class="btn primary block" data-a="closeSheet">Compris, on repart</button>`);
 }
 function powerSound(){
   if (!S.settings.sound || !audioCtx) return;
