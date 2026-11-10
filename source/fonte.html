@@ -384,6 +384,14 @@ table.pct td:last-child{text-align:right;font-weight:700}
 .frbox:active{cursor:grabbing}
 .frgrid{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to right, transparent 33%, rgba(255,255,255,.35) 33%, rgba(255,255,255,.35) calc(33% + 1px), transparent calc(33% + 1px), transparent 66%, rgba(255,255,255,.35) 66%, rgba(255,255,255,.35) calc(66% + 1px), transparent calc(66% + 1px)), linear-gradient(to bottom, transparent 33%, rgba(255,255,255,.35) 33%, rgba(255,255,255,.35) calc(33% + 1px), transparent calc(33% + 1px), transparent 66%, rgba(255,255,255,.35) 66%, rgba(255,255,255,.35) calc(66% + 1px), transparent calc(66% + 1px))}
 input[type=range]{width:100%;accent-color:var(--accent)}
+.draftbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--accent-soft);color:var(--fg);border-radius:14px;padding:10px 12px;font-size:13.5px}
+.tgrid{display:flex;flex-direction:column;gap:14px}
+.tgrow{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.tgrow:first-child{border-top:0;padding-top:0}
+.tgpair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tgcell{display:flex;flex-direction:column;gap:4px;align-items:center}
+.tgbox{width:100%;aspect-ratio:100/120;border-radius:16px;overflow:hidden;background:var(--hero);display:grid;place-items:center}
+.tgnone{color:var(--hero-muted);font-size:12px}
 .pev{display:flex;flex-direction:column;gap:8px}
 .pev .up{color:var(--good);font-weight:700}.pev .down{color:var(--danger);font-weight:700}
 .mslots{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
@@ -842,6 +850,8 @@ function wCard(w){
 /* ----- Routines ----- */
 function vRoutines(){
   let h = topbar('Programmes', S.routines.length + ' programme' + (S.routines.length>1?'s':''), `<button class="iconbtn" data-a="newRoutine" aria-label="Nouveau programme">${I.plus}</button>`);
+  const nd = (S.settings.drafts || {}).new;
+  if (nd) h += `<button class="card row" data-a="newRoutine" style="text-align:left;border-color:var(--accent)"><span class="mus" style="--h:var(--accent)">${I.prog.replace('<svg','<svg width="20" height="20"')}</span><span style="flex:1;min-width:0"><b>Brouillon : ${esc(nd.name)}</b><br><span class="small muted">${nd.exercises.length} exercice${nd.exercises.length>1?'s':''} · touchez pour reprendre la création</span></span>${I.chev}</button>`;
   if (S.routines.length) {
     h += S.routines.map(r => `<div class="card stack rcard">${stripe(r.exercises.map(e=>e.exId))}
       <div class="row between"><div style="min-width:0"><div class="h3">${esc(r.name)}</div><div class="small muted">${r.exercises.length} exercices · ${r.exercises.reduce((a,e)=>a+e.sets,0)} séries · ~${estMin(r)} min</div></div>
@@ -1073,9 +1083,19 @@ function barChart(data, fmt){
 
 /* ---------- Sheets ---------- */
 const sheets = [];
-function openSheet(fn, extra={}){ const s = {id:uid(), fn, ...extra}; sheets.push(s); renderSheets(); return s; }
+// One history entry stands in front of the app while a window is open, so the phone's back gesture closes the top window instead of leaving the app.
+let backEntry = false;
+const armBack = () => { if (backEntry) return; try { history.pushState({fonteSheet:true}, ''); backEntry = true; } catch(e){} };
+function openSheet(fn, extra={}){ const s = {id:uid(), fn, ...extra}; sheets.push(s); renderSheets(); armBack(); return s; }
 function closeSheet(){ const s = sheets.pop(); renderSheets(); if (s && s.onClose) s.onClose(); }
 function closeAll(){ sheets.length = 0; UI.pick = null; renderSheets(); }
+window.addEventListener('popstate', () => {
+  backEntry = false;
+  const pu = document.getElementById('powerup');
+  if (pu && !pu.hidden) A.closePower();
+  else if (sheets.length) closeSheet();
+  if (sheets.length) armBack();
+});
 function refreshSheet(){ renderSheets(); }
 function renderSheets(){
   const root = $('#sheets');
@@ -1117,12 +1137,18 @@ function pickListHtml(){
 }
 
 /* ----- Routine editor ----- */
+// Unsaved program edits are kept as a draft (per program, or 'new'), so closing the editor by mistake loses nothing.
+const draftKey = id => S.routines.some(r => r.id === id) ? id : 'new';
+function saveDraft(){ if (!UI.editR) return; S.settings.drafts = {...(S.settings.drafts || {}), [draftKey(UI.editR.id)]: clone(UI.editR)}; save(); }
+function dropDraft(key){ const d = {...(S.settings.drafts || {})}; delete d[key]; S.settings.drafts = d; save(); }
 function openRoutineEditor(r){
-  UI.editR = r ? clone(r) : {id:uid(), name:'Nouveau programme', notes:'', exercises:[]};
+  const key = r ? r.id : 'new', draft = (S.settings.drafts || {})[key];
+  UI.editR = draft ? clone(draft) : r ? clone(r) : {id:uid(), name:'Nouveau programme', notes:'', exercises:[]};
   const isNew = !r;
   openSheet(() => {
     const d = UI.editR;
     return `${sheetHead(isNew ? 'Nouveau programme' : 'Modifier')}
+      ${(S.settings.drafts || {})[key] ? `<div class="draftbar"><span>Brouillon repris : vos modifications non enregistrées sont là.</span><button class="btn sm ghost" data-a="rRestart" data-k="${key}">${isNew ? 'Recommencer' : 'Annuler les modifications'}</button></div>` : ''}
       <label class="field"><span class="lbl">Nom</span><input id="rName" class="inp" data-in="rName" value="${esc(d.name)}"></label>
       ${d.exercises.length ? d.exercises.map((e,i) => `<div class="card stack" style="padding:12px">
         <div class="row between"><b style="min-width:0">${esc(exById(e.exId).name)}</b><span class="row" style="gap:4px">
@@ -1223,6 +1249,7 @@ function openSettings(){
       <label class="btn" for="packFile">Importer un pack ou une image</label><input id="packFile" type="file" accept=".fontepack,.json,application/json,application/octet-stream,*/*" hidden></div>
     <div class="card stack"><b>Données d’exemple</b><span class="small muted">8 semaines de séances Push / Pull / Legs et une courbe de poids, pour essayer les graphiques. Elles sont marquées « Exemple ».</span>
       ${hasSample?'<button class="btn danger" data-a="removeSample">Retirer les exemples</button>':'<button class="btn" data-a="loadSample">Charger les exemples</button>'}</div>
+    ${mediaTestGallery()}
     ${window.FONTE_VERSION ? `<div class="card row between"><span><b>Version de l’app</b><br><span class="small muted">${appVersionLabel()}</span></span><button class="btn sm ghost" data-a="checkUpdate">Vérifier</button></div>` : ''}
     <button class="btn danger block" data-a="wipe">Effacer toutes mes données</button>`; }, {onClose:render});
 }
@@ -1361,6 +1388,15 @@ document.addEventListener('pointerdown', ev => { const box = ev.target.closest &
 document.addEventListener('pointermove', ev => { if (!frDrag) return; const d = frDrag, sens = 100 / d.f.z;
   setFrame(d.k, {x: d.f.x - (ev.clientX - d.x) / d.w * sens, y: d.f.y - (ev.clientY - d.y) / d.h * sens}); });
 ['pointerup','pointercancel'].forEach(t => document.addEventListener(t, () => { frDrag = null; }));
+// TEMPORARY (test only, remove before the app is final): every transformation with its stored picture and animation.
+function mediaTestGallery(){
+  const cell = (k, label) => `<span class="tgcell"><span class="tgbox">${Media.urls[k] ? Media.html(k) : '<span class="tgnone">Aucun</span>'}</span><span class="lbl">${label}</span></span>`;
+  return `<div class="card stack"><div class="row between"><b>Test · visuels des transformations</b><span class="pill">Temporaire</span></div>
+    <span class="small muted">Aperçu de vos images et animations, avec leur cadrage. Ce bloc sera retiré quand l’app sera terminée.</span>
+    <div class="tgrid">${FORMS.map((f, i) => mk(i) !== i ? '' : `<div class="tgrow"><span class="t">${i === 1 ? 'Kaioken (×1 à ×20)' : i === 14 ? 'Blue Kaioken (×1, ×10, ×20)' : f.n} <span class="small muted">· niv. ${i}</span></span>
+      <span class="tgpair">${cell(i, 'Accueil')}${cell('a' + i, 'Animation')}</span>
+      ${i ? `<button class="btn sm ghost" data-a="previewPower" data-i="${i}">${I.play}Voir l’animation</button>` : ''}</div>`).join('')}</div></div>`;
+}
 function mediaError(e){
   const n = e && e.name;
   if (n === 'QuotaExceededError') return 'Plus assez d’espace sur le téléphone pour ce fichier.';
@@ -1593,11 +1629,12 @@ const A = {
   dupRoutine:d => { const r = S.routines.find(x => x.id === d.id); S.routines.push({...clone(r), id:uid(), name:r.name + ' (copie)'}); save(); closeAll(); render(); toast('Programme dupliqué.'); },
   delRoutine:d => confirmBox('Supprimer le programme ?', 'Les séances déjà réalisées restent dans votre historique.', 'Supprimer', () => { S.routines = S.routines.filter(r => r.id !== d.id); save(); closeAll(); render(); toast('Programme supprimé.'); }),
   addTemplate:d => { S.routines.push(tplRoutine(TEMPLATES[d.i])); save(); render(); toast('« ' + TEMPLATES[d.i].name + ' » ajouté à vos programmes.'); },
-  rMove:d => { const a = UI.editR.exercises, i = +d.i, j = i + +d.d; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; refreshSheet(); },
-  rDel:d => { UI.editR.exercises.splice(+d.i, 1); refreshSheet(); },
-  rSets:d => { const e = UI.editR.exercises[+d.i]; e.sets = Math.max(1, Math.min(12, e.sets + +d.d)); refreshSheet(); },
-  rAddEx:() => openPicker(ids => { ids.forEach(id => UI.editR.exercises.push({exId:id, sets:3, reps:exById(id).kind==='time'?'45':'8-12', rest:S.settings.rest})); }),
-  rSave:() => { const d = UI.editR; d.name = d.name.trim() || 'Programme'; const i = S.routines.findIndex(r => r.id === d.id); if (i >= 0) S.routines[i] = d; else S.routines.push(d); save(); closeAll(); render(); toast('Programme enregistré.'); },
+  rMove:d => { const a = UI.editR.exercises, i = +d.i, j = i + +d.d; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; saveDraft(); refreshSheet(); },
+  rDel:d => { UI.editR.exercises.splice(+d.i, 1); saveDraft(); refreshSheet(); },
+  rSets:d => { const e = UI.editR.exercises[+d.i]; e.sets = Math.max(1, Math.min(12, e.sets + +d.d)); saveDraft(); refreshSheet(); },
+  rAddEx:() => openPicker(ids => { ids.forEach(id => UI.editR.exercises.push({exId:id, sets:3, reps:exById(id).kind==='time'?'45':'8-12', rest:S.settings.rest})); saveDraft(); }),
+  rRestart:d => { dropDraft(d.k); closeSheet(); openRoutineEditor(d.k === 'new' ? null : S.routines.find(r => r.id === d.k)); },
+  rSave:() => { const d = UI.editR; dropDraft(draftKey(d.id)); d.name = d.name.trim() || 'Programme'; const i = S.routines.findIndex(r => r.id === d.id); if (i >= 0) S.routines[i] = d; else S.routines.push(d); save(); closeAll(); render(); toast('Programme enregistré.'); },
   saveAsRoutine:d => { const w = S.workouts.find(x => x.id === d.id); S.routines.push({id:uid(), name:w.name, notes:'', exercises:routineFromWorkout(w)}); save(); closeAll(); render(); toast('Programme créé à partir de la séance.'); },
   updateRoutineFrom:d => { const w = S.workouts.find(x => x.id === d.id), r = S.routines.find(x => x.id === w.routineId); if (r) { const old = Object.fromEntries(r.exercises.map(e => [e.exId, e])); r.exercises = routineFromWorkout(w).map(e => old[e.exId] ? {...e, reps:old[e.exId].reps, rest:old[e.exId].rest, w:e.w ?? old[e.exId].w} : e); save(); } closeAll(); render(); toast('Programme mis à jour.'); },
   // picker
@@ -1701,11 +1738,11 @@ const IN = {
   exNote:(v,d) => { S.active.exercises[+d.e].note = v; save(); },
   exQ:v => { UI.exQ = v; $('#exList').innerHTML = exListHtml(); },
   pickQ:v => { UI.pick.q = v; $('#pickList').innerHTML = pickListHtml(); },
-  rName:v => { UI.editR.name = v; },
-  rNotes:v => { UI.editR.notes = v; },
-  rReps:(v,d) => { UI.editR.exercises[+d.i].reps = v; },
-  rW:(v,d) => { UI.editR.exercises[+d.i].w = v.trim() === '' ? null : toKg(v); },
-  rRest:(v,d) => { UI.editR.exercises[+d.i].rest = +v; },
+  rName:v => { UI.editR.name = v; saveDraft(); },
+  rNotes:v => { UI.editR.notes = v; saveDraft(); },
+  rReps:(v,d) => { UI.editR.exercises[+d.i].reps = v; saveDraft(); },
+  rW:(v,d) => { UI.editR.exercises[+d.i].w = v.trim() === '' ? null : toKg(v); saveDraft(); },
+  rRest:(v,d) => { UI.editR.exercises[+d.i].rest = +v; saveDraft(); },
   stName:v => { S.settings.name = v; save(); },
   frX:(v,d) => setFrame(mediaKey(d.k), {x:+v}),
   frY:(v,d) => setFrame(mediaKey(d.k), {y:+v}),
